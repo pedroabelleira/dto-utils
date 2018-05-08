@@ -1,50 +1,32 @@
 (ns dto.core
   (:gen-class)
-  (:require [clojure.reflect :as ref]
-            [clojure.string  :as st]))
+  (:import dto.api.IPerson)
+  (:require [dto.util :refer :all]
+            [clojure.java.jdbc :as jdbc]))
+
+(def db {:classname   "org.h2.Driver" 
+         :url         "jdbc:h2:mem:activiti;DB_CLOSE_DELAY=1000"
+         :user     "sa"
+         :password ""})
+(def db-spec
+  {:connection-uri "jdbc:h2:mem:activiti;DB_CLOSE_DELAY=1000"
+   :user           "sa"
+   :password        ""})
+
+(defn- create-db []
+  (let [sql (slurp "/home/pedro/dev/clojure/dto-utils/resources/db-create.sql")]
+    (jdbc/execute! db-spec sql)))
+
+(defn- user-by-id [id]
+  (let [sql (str "select * from OIBADMIN_ROLES where role_id = '" id "'")]
+    (jdbc/query db-spec sql)))
+
 
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
-
-(defn- is-getter? [method]
-  (and (is-void? method)
-       (is-method? method)
-       (st/starts-with? (str (:name method)) "get")))
-
-(defn- is-method? [method]
-  (isa? clojure.reflect.Method (class method)))
-
-(defn- is-void? [method]
-  (= 0 (count (:parameter-types method))))
-
-(defn- find-interface-getters [iface]
-  (let [info (ref/reflect iface)
-        members (:members info)
-        meths (filter is-getter? members)]
-    meths))
-
-(defn- to-kebab-case [ch]
-  (if (= (str ch) (st/capitalize ch))
-    (str "-" (st/lower-case ch))
-    ch))
-
-(defn- build-key [name]
-  (st/replace 
-   (st/join (map to-kebab-case name))
-   "get-"
-   ""))
-
-(defn- create-method-form [method obj]
-  ;(println "Call to create-method-form [" method " " obj "]")
-  (let [name (:name method)
-        key (build-key (str name))]
-    `(~name [~'_] (~(keyword key) ~obj))))
-
-(defmacro defdto [iface obj]
-  (->>
-   (map #(create-method-form % obj) (find-interface-getters (eval iface)))
-   (cons iface)
-   (cons 'reify)))
+  (let [p (defdto IPerson {:name "Pedro" :sur-name "Abelleira Seco"})]
+    (create-db)
+    (println (user-by-id 1))
+    (println "Hello," (.getName p) "!")))
 
