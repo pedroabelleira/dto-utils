@@ -2,14 +2,12 @@
   (:gen-class)
   (:import dto.api.IPerson)
   (:require [dto.util :refer :all]
-            [clojure.java.jdbc :as jdbc]))
+            [clojure.java.jdbc :as jdbc]
+            [korma.core :refer :all]
+            [korma.db :as kd]))
 
-(def db {:classname   "org.h2.Driver" 
-         :url         "jdbc:h2:mem:activiti;DB_CLOSE_DELAY=1000"
-         :user     "sa"
-         :password ""})
 (def db-spec
-  {:connection-uri "jdbc:h2:mem:activiti;DB_CLOSE_DELAY=1000"
+  {:connection-uri "jdbc:h2:mem:activiti;DB_CLOSE_DELAY=100000"
    :user           "sa"
    :password        ""})
 
@@ -18,9 +16,14 @@
     (jdbc/execute! db-spec sql)))
 
 (defn- user-by-id [id]
-  (let [sql (str "select * from OIBADMIN_ROLES where role_id = '" id "'")]
+  (let [sql (str "select * from oibadmin_roles where role_id = '" id "'")]
     (jdbc/query db-spec sql)))
 
+(defentity
+  roles
+  (database db-spec)
+  (entity-fields :role_id :name :description)
+  (table :oibadmin_roles))
 
 (defn -main
   "I don't do a whole lot ... yet."
