@@ -28,8 +28,9 @@
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (let [p (defdto IPerson {:name "Pedro" :sur-name "Abelleira Seco"})]
+  (let [p (map->dto {:name "John" :sur-name "Doe"} IPerson)]
     (create-db)
-    (println (user-by-id 1))
+    (println "With SQL:" (user-by-id 1))
+    ;(println "With Korma:" (select roles))
     (println "Hello," (.getName p) "!")))
 

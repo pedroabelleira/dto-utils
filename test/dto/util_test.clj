@@ -13,8 +13,14 @@
   (let [keys (keys small)]
     (reduce #(and %1 %2) (map #(map-equal-in-key? % small big) keys))))
 
-(deftest a-test
-  (testing "Dto simple"
-    (let [d {:name "John" :sur-name "Doe"}
-          p (defdto IPerson d)]
-      (is (submap? d (bean p))))))
+(comment
+  (deftest a-test
+    (testing "Dto simple"
+      (let [d {:name "John" :sur-name "Doe"}
+            p (defdto IPerson d)]
+        (is (submap? d (bean p))))))
+  )
+
+(deftest interface-test
+  (testing "dto.util.interface?"
+    (is (#'dto.util/interface? java.util.Collection))))

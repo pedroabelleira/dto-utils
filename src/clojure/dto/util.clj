@@ -1,14 +1,16 @@
 (ns dto.util
+  "Macro and related utilities to implement Java interfaces from
+  clojure structures"
   (:gen-class)
   (:require [clojure.reflect :as ref]
             [clojure.string  :as st]
-            [clojure.string :as str]))
+            [clojure.string  :as str]))
 
 (defn- has-empty-parameter-list? [method]
   (= 0 (count (:parameter-types method))))
 
-(defn- interface? [clazz] ; FIXME: there must be a method for this
-  (-> clazz :flags (contains? :interface)))
+(defn interface? [clazz] ; FIXME: there must be a method for this
+  (-> (ref/reflect clazz) :flags (contains? :interface)))
 
 (defn- method? [method]
   (isa? clojure.reflect.Method (class method)))
@@ -19,14 +21,15 @@
        (st/starts-with? (str (:name method)) "get")))
 
 (defn- find-interface-getters
-  "Returns all the getter methods (name starts by 'get', has no parameters, ...) of the given interface iface"
+  "Returns all the getter methods (name starts by 'get', has no parameters, ...) of
+  the given interface iface"
   [iface]
-  (let [info (ref/reflect iface)
+  (let [info    (ref/reflect iface)
         members (:members info)
-        meths (filter getter? members)]
+        meths   (filter getter? members)]
     meths))
 
-(defn kebab->camel-reductor [acc next]
+(defn- kebab->camel-reductor [acc next]
   (if (= \- (last acc))
     (str acc (clojure.string/capitalize next)) ; FIXME
     (str acc next)))
@@ -57,7 +60,7 @@
   [name]
   (keyword (st/replace (camel->kebab name) "get-" "")))
 
-(defn- create-array-method-form [method obj type])
+(defn- create-array-method-form [method obj type]) ; FIXME: implement
 
 (defn- create-direct-method-form
   "Method for properties which don't correspond array or
@@ -69,23 +72,59 @@
 
 (defn- dto-iface? [iface iface-pred]
   (let [iface-pred (if (nil? iface-pred)
-                     xxx
-                     yyy)
-        ]
-    ))
+                     (and (interface? iface)
+                          (str/starts-with?) (ref/typename iface))
+                     iface-pred)]))
 
-(defn- create-method-form [method obj & iface-pred]
+(defn- name-iface
+  "Returns the name of the interface iface as a string"
+  [iface]
+  (->> (partition-by #(= \. %) (ref/typename iface))
+       (map str/join)
+       (last)))
+
+(defn- package-iface
+  "Returns the package of the interface iface as a string"
+  [iface]
+  (->> (partition-by #(= \. %) (ref/typename iface))
+       (map str/join)
+       (butlast)
+       (butlast)
+       (str/join)))
+
+(defn- create-iface-pred
+  "Creates the predicate to test whether an interface should be
+  considered as representing a DTO, from an start predicate.
+  If the predicate is nil, then the predicate will be set to
+  'is the test interface in the same package as the given interface iface?'
+  If the initial predicate is a string, the generated predicate will be
+  'is the test interface in the package of the given string, or any
+  subpackage of that one?'
+  In any other case the predicate is returned unchanged"
+  [iface & [pred]]
+  (cond
+    (nil? pred)
+    (create-iface-pred iface (package-iface iface))
+
+    (string? pred)
+    (fn [test-iface] (str/starts-with? (package-iface iface)
+                                       (package-iface test-iface)))
+    :else pred))
+
+(defn- create-method-form [method obj iface-pred]
   (let [return-type    (:return-type method)
         array?         (str/ends-with? method "<>")
         real-ret-type  (if array? (str/replace #"<>$" "") return-type)
-        iface?         (dto-iface? real-ret-type iface-pred)]
-    (if array?
-      (println "Array found")
-      (create-direct-method-form method obj))))
+        recur?         (iface-pred real-ret-type)]
+    (println return-type array? real-ret-type recur?)
+    (cond
+      array? (println "Array found: not implemented")
+      recur? (do (println "Interface DTO found: " real-ret-type " -> not implemented yet") (create-direct-method-form method obj))
+      :else (create-direct-method-form method obj))))
 
 (defmacro map->dto
-  "Defines an object which implements the interface iface by returning to any call
-   of format getAbcXyz(void)  the value (:abc-xyz obj)
+  "Defines an object which implements the interface iface by returning to any
+   call of format getAbcXyz(void)  the value (:abc-xyz obj)
    iface-pred represents the criteria for other interfaces found in
    the methods of the main interface to be treated as DTOs.
    iface-pred can be either a string or a function of one argument.
@@ -94,11 +133,12 @@
    if must have an argument which is the interface found and return true
    or false depending whether this interface is a DTO or not"
   [obj iface & iface-pred]
-  (->>
-   (map #(create-method-form % obj iface-pred)
-        (find-interface-getters (eval iface)))
-   (cons iface)
-   (cons 'reify)))
+  (let [iface-pred (create-iface-pred iface iface-pred)]
+    (->>
+     (map #(create-method-form % obj iface-pred)
+          (find-interface-getters (eval iface)))
+     (cons iface)
+     (cons 'reify))))
 
 (defn dto->map
   "Converts an object assumed to have been created by a call to map->dto
@@ -114,8 +154,15 @@
             {}
             keys)))
 
-(defn create-person [m]
-  (reify IPerson
-    (getSurName [_] (:sur-name m))
-    (getName [_] (:name m))
-    (getAddress [_] (map->dto (:address m) dto.api.IAddress))))
+(comment
+  (defn create-person [m] ; FIXME: remove once done
+    (reify
+      IPerson
+      (getSurName [_] (:sur-name m))
+      (getName [_] (:name m))
+      (getAddress [_] (map->dto (:address m) dto.api.IAddress))
+      dto.api.IGroup
+      (getMembers [_] nil)))
+  )
+
+
