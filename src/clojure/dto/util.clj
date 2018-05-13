@@ -87,7 +87,7 @@
 (defn- apply-transform [f form] ; Applies a transformation f to a given clojure form
   (if (nil? f) form (f form)))
 
-(declare map->dto)
+(declare map->dto*)
 
 (defn- create-direct-getter-form [method obj]
   [method obj]
@@ -98,9 +98,8 @@
 (defn- create-dto-getter-form [method obj type]
   (let [name (:name method)
         key (keyword (build-key (str name)))
-        ;body (map->dto (key obj) type)
-        ]
-    `(~name [~'_] (map->dto (~(keyword key) ~obj) ~type))))
+        body (map->dto* (key obj) type)]
+    `(~name [~'_] ~body)))
 
 (defn- create-array-getter-form [method obj type]
   create-direct-getter-form method obj) ;~ FIXME: implement
@@ -136,6 +135,15 @@
       dto?   (create-dto-getter-form method obj real-ret-type)
       :else  (create-direct-getter-form method obj))))
 
+(defn map->dto*
+  [obj iface & [iface-pred]]
+  (let [iface-pred (create-iface-pred iface iface-pred)]
+    (->>
+     (map #(create-getter-form % obj iface-pred)
+          (find-interface-getters (eval iface)))
+     (cons iface) ; this strange order is needed because getters can't be on a list
+     (cons 'reify))))
+
 (defmacro map->dto
   "Defines an object which implements the interface iface by returning to any
    call of format getAbcXyz(void)  the value (:abc-xyz obj)
@@ -147,12 +155,7 @@
    if must have an argument which is the interface found and return true
    or false depending whether this interface is a DTO or not"
   [obj iface & iface-pred]
-  (let [iface-pred (create-iface-pred iface iface-pred)]
-    (->>
-     (map #(create-getter-form % obj iface-pred)
-          (find-interface-getters (eval iface)))
-     (cons iface) ; this strange order is needed because getters can't be on a list
-     (cons 'reify))))
+  (map->dto* obj iface iface-pred))
 
 (defn- dto?
   "Returns true is the object passed seems to be a dto created by the map->dto macro"
