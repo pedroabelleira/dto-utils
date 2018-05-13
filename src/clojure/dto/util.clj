@@ -6,10 +6,14 @@
             [clojure.string  :as st]
             [clojure.string  :as str]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Utility functions 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defn- has-empty-parameter-list? [method]
   (= 0 (count (:parameter-types method))))
 
-(defn interface? [clazz] ; FIXME: there must be a method for this
+(defn- interface? [clazz]
   (-> (ref/reflect clazz) :flags (contains? :interface)))
 
 (defn- method? [method]
@@ -31,7 +35,7 @@
 
 (defn- kebab->camel-reductor [acc next]
   (if (= \- (last acc))
-    (str acc (clojure.string/capitalize next)) ; FIXME
+    (str acc (clojure.string/capitalize next)) ; FIXME: A bit hackish...
     (str acc next)))
 
 (defn kebab->camel
@@ -60,22 +64,6 @@
   [name]
   (keyword (st/replace (camel->kebab name) "get-" "")))
 
-(defn- create-array-method-form [method obj type]) ; FIXME: implement
-
-(defn- create-direct-method-form
-  "Method for properties which don't correspond array or
-  mappable interfaces"
-  [method obj]
-  (let [name (:name method)
-        key (build-key (str name))]
-    `(~name [~'_] (~(keyword key) ~obj))))
-
-(defn- dto-iface? [iface iface-pred]
-  (let [iface-pred (if (nil? iface-pred)
-                     (and (interface? iface)
-                          (str/starts-with?) (ref/typename iface))
-                     iface-pred)]))
-
 (defn- name-iface
   "Returns the name of the interface iface as a string"
   [iface]
@@ -92,6 +80,31 @@
        (butlast)
        (str/join)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Functions used in macro expansion
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn- apply-transform [f form] ; Applies a transformation f to a given clojure form
+  (if (nil? f) form (f form)))
+
+(declare map->dto)
+
+(defn- create-direct-getter-form [method obj]
+  [method obj]
+  (let [name (:name method)
+        key (build-key (str name))]
+    `(~name [~'_] (~(keyword key) ~obj))))
+
+(defn- create-dto-getter-form [method obj type]
+  (let [name (:name method)
+        key (keyword (build-key (str name)))
+        ;body (map->dto (key obj) type)
+        ]
+    `(~name [~'_] (map->dto (~(keyword key) ~obj) ~type))))
+
+(defn- create-array-getter-form [method obj type]
+  create-direct-getter-form method obj) ;~ FIXME: implement
+
 (defn- create-iface-pred
   "Creates the predicate to test whether an interface should be
   considered as representing a DTO, from an start predicate.
@@ -102,6 +115,8 @@
   subpackage of that one?'
   In any other case the predicate is returned unchanged"
   [iface & [pred]]
+  (let [myiface (resolve iface)]
+    println "** myiface: " iface)
   (cond
     (nil? pred)
     (create-iface-pred iface (package-iface iface))
@@ -111,16 +126,15 @@
                                        (package-iface test-iface)))
     :else pred))
 
-(defn- create-method-form [method obj iface-pred]
+(defn- create-getter-form [method obj iface-pred]
   (let [return-type    (:return-type method)
         array?         (str/ends-with? method "<>")
         real-ret-type  (if array? (str/replace #"<>$" "") return-type)
-        recur?         (iface-pred real-ret-type)]
-    (println return-type array? real-ret-type recur?)
+        dto?           (iface-pred real-ret-type)]
     (cond
-      array? (println "Array found: not implemented")
-      recur? (do (println "Interface DTO found: " real-ret-type " -> not implemented yet") (create-direct-method-form method obj))
-      :else (create-direct-method-form method obj))))
+      array? (create-array-getter-form method obj real-ret-type)
+      dto?   (create-dto-getter-form method obj real-ret-type)
+      :else  (create-direct-getter-form method obj))))
 
 (defmacro map->dto
   "Defines an object which implements the interface iface by returning to any
@@ -135,10 +149,20 @@
   [obj iface & iface-pred]
   (let [iface-pred (create-iface-pred iface iface-pred)]
     (->>
-     (map #(create-method-form % obj iface-pred)
+     (map #(create-getter-form % obj iface-pred)
           (find-interface-getters (eval iface)))
-     (cons iface)
+     (cons iface) ; this strange order is needed because getters can't be on a list
      (cons 'reify))))
+
+(defn- dto?
+  "Returns true is the object passed seems to be a dto created by the map->dto macro"
+  [ob]
+  (let [dec-classes (set (as-> (ref/reflect ob) it (:members it) (map :declaring-class it)))]
+    (and
+     (= 1 (count dec-classes))
+     (not (nil? (str/index-of (str dec-classes) "reify"))))))
+
+(declare read-dto-value)
 
 (defn dto->map
   "Converts an object assumed to have been created by a call to map->dto
@@ -150,19 +174,30 @@
         keys (remove #(= :class %) rawkeys)] ; The dto adds a class property
     (reduce (fn [acc next] (assoc acc
                                   (keyword (camel->kebab (name next)))
-                                  (get b next)))
+                                  (read-dto-value (get b next))))
             {}
             keys)))
 
+(defn- read-dto-value [d]
+  (if (dto? d)
+    (dto->map d)
+    d))
+
 (comment
-  (defn create-person [m] ; FIXME: remove once done
-    (reify
-      IPerson
-      (getSurName [_] (:sur-name m))
-      (getName [_] (:name m))
-      (getAddress [_] (map->dto (:address m) dto.api.IAddress))
-      dto.api.IGroup
-      (getMembers [_] nil)))
-  )
+  (defn create-person [m]
+    (let [p
+          (reify
+            dto.api.IPerson
+            (getSurName [_] (:sur-name m))
+            (getName [_] (:name m))
+            (getAddress [_] (map->dto (:address m) dto.api.IAddress))
+            dto.api.IGroup
+            (getMembers [_] nil))
+          clazz (class p)]
+      (println "Generated class: " clazz)
+      clazz))
 
-
+  (import dto.api.IPerson dto.api.IAddress dto.api.IGroup)
+  (require '[dto.util :refer :all])
+  (def m {:name "John" :sur-name "Doe" :address {:street "Rue" :number "42"}})
+  (macroexpand-1 '(map->dto m IPerson)))

@@ -18,9 +18,27 @@
     (testing "Dto simple"
       (let [d {:name "John" :sur-name "Doe"}
             p (defdto IPerson d)]
-        (is (submap? d (bean p))))))
-  )
+        (is (submap? d (bean p)))))))
 
 (deftest interface-test
-  (testing "dto.util.interface?"
+  (testing "interface?"
     (is (#'dto.util/interface? java.util.Collection))))
+
+(deftest build-key-test
+  (testing "build-key"
+    (is (#'dto.util/build-key "getFirstName") :first-name)
+    (is (#'dto.util/build-key "getFirstOrLastName") :first-or-last-name)))
+
+(deftest name-iface-test
+  (testing "name-iface"
+    (is (#'dto.util/name-iface java.util.Collection) "Collection")
+    (is (#'dto.util/name-iface java.util.ArrayList) "ArrayList")))
+
+(deftest map->dto-test
+  (testing "map->dto"
+    (let [orig {:name "John" :sur-name "Doe"}]
+      (is
+       (nil?
+        (first
+         (clojure.data/diff orig (dto->map (map->dto orig IPerson)))))))))
+
