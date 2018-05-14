@@ -98,7 +98,7 @@
 (defn- create-dto-getter-form [method obj type]
   (let [name (:name method)
         key (keyword (build-key (str name)))
-        body (map->dto* (key obj) type)]
+        body (map->dto* `(~key ~obj) type)]
     `(~name [~'_] ~body)))
 
 (defn- create-array-getter-form [method obj type]
@@ -138,11 +138,9 @@
 (defn map->dto*
   [obj iface & [iface-pred]]
   (let [iface-pred (create-iface-pred iface iface-pred)]
-    (->>
-     (map #(create-getter-form % obj iface-pred)
-          (find-interface-getters (eval iface)))
-     (cons iface) ; this strange order is needed because getters can't be on a list
-     (cons 'reify))))
+    `(reify ~iface
+       ~@(map #(create-getter-form % obj iface-pred)
+           (find-interface-getters (resolve iface))))))
 
 (defmacro map->dto
   "Defines an object which implements the interface iface by returning to any
@@ -157,6 +155,23 @@
   [obj iface & iface-pred]
   (map->dto* obj iface iface-pred))
 
+(declare read-dto-value)
+
+(defn dto->map
+  "Converts an object assumed to have been created by a call to map->dto
+   to a map form. Similar to 'bean' but converts properties to kebab case"
+  [o]
+
+ () (let [b (bean o)
+        rawkeys (keys b)
+        keys    (remove #(= :class %) rawkeys)] ; The dto adds a class property
+    (reduce (fn [acc next]
+              (assoc acc
+                     (keyword (camel->kebab (name next)))
+                     (read-dto-value (get b next))))
+            {}
+            keys)))
+
 (defn- dto?
   "Returns true is the object passed seems to be a dto created by the map->dto macro"
   [ob]
@@ -165,26 +180,11 @@
      (= 1 (count dec-classes))
      (not (nil? (str/index-of (str dec-classes) "reify"))))))
 
-(declare read-dto-value)
-
-(defn dto->map
-  "Converts an object assumed to have been created by a call to map->dto
-   to a map form. Similar to 'bean' but converts properties to kebab case"
-  [o]
-
-  (let [b (bean o)
-        rawkeys (keys b)
-        keys (remove #(= :class %) rawkeys)] ; The dto adds a class property
-    (reduce (fn [acc next] (assoc acc
-                                  (keyword (camel->kebab (name next)))
-                                  (read-dto-value (get b next))))
-            {}
-            keys)))
-
 (defn- read-dto-value [d]
-  (if (dto? d)
-    (dto->map d)
-    d))
+  (cond
+    (nil? d)  nil
+    (dto? d) (dto->map d)
+    :else    d))
 
 (comment
   (defn create-person [m]
