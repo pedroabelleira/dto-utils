@@ -161,8 +161,7 @@
   "Converts an object assumed to have been created by a call to map->dto
    to a map form. Similar to 'bean' but converts properties to kebab case"
   [o]
-
- () (let [b (bean o)
+  (let [b (bean o)
         rawkeys (keys b)
         keys    (remove #(= :class %) rawkeys)] ; The dto adds a class property
     (reduce (fn [acc next]
