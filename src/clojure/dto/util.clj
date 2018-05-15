@@ -19,8 +19,8 @@
   (isa? clojure.reflect.Method (class method)))
 
 (defn- getter? [method]
-  (and (has-empty-parameter-list? method)
-       (method? method)
+  (and (method? method)
+       (has-empty-parameter-list? method)
        (str/starts-with? (str (:name method)) "get")))
 
 (defn- find-interface-getters
