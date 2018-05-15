@@ -1,6 +1,7 @@
 (ns dto.util-test
   (:import dto.api.IPerson)
   (:require [clojure.test :refer :all]
+            [clojure.data :as data]
             [dto.util :refer :all :use-macros true]))
 
 (defn- map-equal-in-key? [key m1 m2]
@@ -34,11 +35,19 @@
     (is (#'dto.util/name-iface java.util.Collection) "Collection")
     (is (#'dto.util/name-iface java.util.ArrayList) "ArrayList")))
 
-(deftest map->dto-test
+(deftest map->dto-test1
   (testing "map->dto"
     (let [orig {:name "John" :sur-name "Doe"}]
       (is
        (nil?
         (first
-         (clojure.data/diff orig (dto->map (map->dto orig IPerson)))))))))
+         (data/diff orig (dto->map (map->dto orig dto.api.IPerson)))))))))
 
+
+(deftest map->dto-test1
+  (testing "map->dto"
+    (let [orig {:name "John" :sur-name "Doe" :address {:street "Rue de L'angle" :number "42"}}]
+      (is
+       (nil?
+        (first
+         (data/diff orig (dto->map (map->dto orig dto.api.IPerson)))))))))

@@ -1,7 +1,7 @@
 (ns dto.util
   "Macro and related utilities to implement Java interfaces from
   clojure structures"
-  (:gen-class)
+  ;(:gen-class)
   (:require [clojure.reflect :as ref]
             [clojure.string  :as st]
             [clojure.string  :as str]))
@@ -87,23 +87,6 @@
 (defn- apply-transform [f form] ; Applies a transformation f to a given clojure form
   (if (nil? f) form (f form)))
 
-(declare map->dto*)
-
-(defn- create-direct-getter-form [method obj]
-  [method obj]
-  (let [name (:name method)
-        key (build-key (str name))]
-    `(~name [~'_] (~(keyword key) ~obj))))
-
-(defn- create-dto-getter-form [method obj type]
-  (let [name (:name method)
-        key (keyword (build-key (str name)))
-        body (map->dto* `(~key ~obj) type)]
-    `(~name [~'_] ~body)))
-
-(defn- create-array-getter-form [method obj type]
-  create-direct-getter-form method obj) ;~ FIXME: implement
-
 (defn- create-iface-pred
   "Creates the predicate to test whether an interface should be
   considered as representing a DTO, from an start predicate.
@@ -114,8 +97,6 @@
   subpackage of that one?'
   In any other case the predicate is returned unchanged"
   [iface & [pred]]
-  (let [myiface (resolve iface)]
-    println "** myiface: " iface)
   (cond
     (nil? pred)
     (create-iface-pred iface (package-iface iface))
@@ -125,22 +106,34 @@
                                        (package-iface test-iface)))
     :else pred))
 
+(declare map->dto*)
+
 (defn- create-getter-form [method obj iface-pred]
-  (let [return-type    (:return-type method)
-        array?         (str/ends-with? method "<>")
-        real-ret-type  (if array? (str/replace #"<>$" "") return-type)
-        dto?           (iface-pred real-ret-type)]
-    (cond
-      array? (create-array-getter-form method obj real-ret-type)
-      dto?   (create-dto-getter-form method obj real-ret-type)
-      :else  (create-direct-getter-form method obj))))
+  (let [rtype1 (str (:return-type method)) ; Note the conversion back and forth from type to string...
+        array? (str/ends-with? rtype1 "<>")
+        rtype  (symbol
+                (if array?
+                  (str/replace rtype1 #"<>$" "")
+                  rtype1))
+        dto?   (iface-pred rtype) ; Here again 
+        name   (:name method)
+        key    (keyword (build-key (str name)))
+        body1  `(~key ~obj)
+        body   (if array?
+                 (if dto?
+                   `(into-array ~rtype (map #(map->dto* % ~rtype) ~body1))
+                   `(into-array ~rtype ~body1))
+                 (if dto?
+                   (map->dto* `(~key ~obj) rtype)
+                   body1))]
+    `(~name [~'_] ~body)))
 
 (defn map->dto*
   [obj iface & [iface-pred]]
   (let [iface-pred (create-iface-pred iface iface-pred)]
     `(reify ~iface
        ~@(map #(create-getter-form % obj iface-pred)
-           (find-interface-getters (resolve iface))))))
+              (find-interface-getters (resolve iface))))))
 
 (defmacro map->dto
   "Defines an object which implements the interface iface by returning to any
@@ -171,35 +164,61 @@
             {}
             keys)))
 
+(defn- is-array? [ob]
+  (if (nil? ob)
+    false
+    (.isArray (class ob))))
+
 (defn- dto?
-  "Returns true is the object passed seems to be a dto created by the map->dto macro"
+  "Returns true if the object passed seems to be a dto created by the map->dto macro"
   [ob]
-  (let [dec-classes (set (as-> (ref/reflect ob) it (:members it) (map :declaring-class it)))]
-    (and
-     (= 1 (count dec-classes))
-     (not (nil? (str/index-of (str dec-classes) "reify"))))))
+  (if (or (nil? ob) (is-array? ob))
+    false
+    (let [dec-classes (set (as-> (ref/reflect ob) it (:members it) (map :declaring-class it)))]
+      (and
+       (= 1 (count dec-classes))
+       (not (nil? (str/index-of (str dec-classes) "reify")))))))
 
 (defn- read-dto-value [d]
   (cond
-    (nil? d)  nil
-    (dto? d) (dto->map d)
-    :else    d))
+    (nil? d)      nil
+    (dto? d)      (dto->map d)
+    (is-array? d) (map read-dto-value (seq d))
+    :else         d))
 
 (comment
-  (defn create-person [m]
-    (let [p
-          (reify
-            dto.api.IPerson
-            (getSurName [_] (:sur-name m))
-            (getName [_] (:name m))
-            (getAddress [_] (map->dto (:address m) dto.api.IAddress))
-            dto.api.IGroup
-            (getMembers [_] nil))
-          clazz (class p)]
-      (println "Generated class: " clazz)
-      clazz))
-
+  ;; Useful code to use in the REPL
   (import dto.api.IPerson dto.api.IAddress dto.api.IGroup)
   (require '[dto.util :refer :all])
-  (def m {:name "John" :sur-name "Doe" :address {:street "Rue" :number "42"}})
-  (macroexpand-1 '(map->dto m IPerson)))
+  (def m {:name "John" :sur-name "Doe" :aliases ["John Maddog Doe" "Johnny"] :address {:street "Rue" :number "42"}})
+
+  ;; Example usage
+  (def p (map->dto m dto.api.IPerson)) ; p now points to an object implementing the IPerson interface
+
+  ;; Generated code can be checked with
+  (macroexpand-1 '(map->dto m dto.api.IPerson))
+
+  ;; Example code produced by the line above
+  (clojure.core/reify
+    dto.api.IPerson
+    (getOtherAddresses
+      [_]
+      (clojure.core/into-array
+       dto.api.IAddress
+       (clojure.core/map
+        (fn*
+         [p1__19333__19334__auto__]
+         (dto.util/map->dto* p1__19333__19334__auto__ dto.api.IAddress))
+        (:other-addresses m))))
+    (getAliases
+      [_]
+      (clojure.core/into-array java.lang.String (:aliases m)))
+    (getSurName [_] (:sur-name m))
+    (getAddress
+      [_]
+      (clojure.core/reify
+        dto.api.IAddress
+        (getNumber [_] (:number (:address m)))
+        (getFullAddress [_] (:full-address (:address m)))
+        (getStreet [_] (:street (:address m)))))
+    (getName [_] (:name m))))
