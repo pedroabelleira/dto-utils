@@ -125,17 +125,17 @@
         body1  `(~key ~obj)
         body   (if array?
                  (if dto?
-                   `(into-array ~rtype (map #(map->dto* % ~rtype) ~body1))
-                   `(into-array ~rtype ~body1))
+                   `(~'into-array ~rtype (map #(map->dto* % ~rtype) ~body1))
+                   `(~'into-array ~rtype ~body1))
                  (if dto?
-                   (map->dto* `(~key ~obj) rtype)
+                   (map->dto* body1 rtype)
                    body1))]
     `(~name [~'_] ~body)))
 
 (defn map->dto*
   [obj iface & [iface-pred]]
   (let [iface-pred (create-iface-pred iface iface-pred)]
-    `(reify ~iface
+    `(~'reify ~iface
        ~@(map #(create-getter-form % obj iface-pred)
               (find-interface-getters (resolve iface))))))
 
@@ -203,24 +203,22 @@
   (macroexpand-1 '(map->dto m dto.api.IPerson))
 
   ;; Example code produced by the line above
-  (clojure.core/reify
+  (reify
     dto.api.IPerson
     (getOtherAddresses
-      [_]
-      (clojure.core/into-array
+        [_]
+      (into-array
        dto.api.IAddress
        (clojure.core/map
         (fn*
-         [p1__19333__19334__auto__]
-         (dto.util/map->dto* p1__19333__19334__auto__ dto.api.IAddress))
+         [p1__19790__19791__auto__]
+         (dto.util/map->dto* p1__19790__19791__auto__ dto.api.IAddress))
         (:other-addresses m))))
-    (getAliases
-      [_]
-      (clojure.core/into-array java.lang.String (:aliases m)))
+    (getAliases [_] (into-array java.lang.String (:aliases m)))
     (getSurName [_] (:sur-name m))
     (getAddress
-      [_]
-      (clojure.core/reify
+        [_]
+      (reify
         dto.api.IAddress
         (getNumber [_] (:number (:address m)))
         (getFullAddress [_] (:full-address (:address m)))
