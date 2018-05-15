@@ -1,39 +1,80 @@
 # dto-utils
 
-This library covers a very narrow use case: we want to implement in clojure a
-set of services defined as Java interfaces which return data defined
-as interfaces instead of DTOs. I.e., services with methods of the form:
+## Objective
 
-IPerson [] getPeopleByCriteria(String criteria);
+I want to be able to automatically transform data structures retrieved from
+a DB into object implementing DTO-like interfaces. This is the quite narrow
+use case for this library.
 
-where IPerson is an interface which acts as a DTO, but read only (it
-only has get\* methods). Some of those methods could return objects
-(or arrays of objects) of other similar interfaces. In those cases,
-we also want to implement those interfaces.
+## Example
 
-The question is, of course, why to use interfaces instead of plain
-DTOs to transfer data. That's an interesting question, which won't
-be responded here.
+Let's imagine we have the following Java interfaces
 
-The main concrete use case is to allow quickly prototyping of DB
-based services where data can be retrieved from the DB in a more of
-less isomorphic form to the interfaces returned by the service. 
+```java
 
-## Usage
+package dto.api;
 
-Let's assume we have a map m with the data which conforms to the
-service interface. Then returning an object which implements the
-interface is as simple as:
+public interface IAddress {
+    String getStreet();
+    String getNumber();
 
-...
+    default String getFullAddress() {
+        return getStreet() + " "  + getNumber();
+    }
+}
 
-(map->dto m IPerson)
+public interface IGroup { 
+    String getName();
+    IPerson[] getMembers();
+}
 
-...
+public interface IPerson {
+    String getName();
+    String getSurName();
+    IAddress getAddress();
+    IAddress [] getOtherAddresses();
+    String [] getAliases();
+}
 
-This creates an object which implements the IPerson interface and
-uses m as the source of data. 
+```
 
+And let's imagine that we have a service like this:
+
+```java
+
+public interface IUserService {
+    IPerson getPersonById(String id);
+}
+
+```
+
+The objective is to be able to implement the service in clojure without having
+to implement the IPerson, IAddress or IGroup interfaces.
+
+The clojure code we look for is something like:
+
+```clojure
+
+(defn -getPersonById [id]
+  (let [person (retrieve-person-from-db id)]
+    (map->dto person dto.api.IPerson)))
+
+```
+
+Or, if using something like korma
+
+```clojure
+
+(defn -getPersonById [id]
+  (map->dto (select persons (with address)
+                            (with other-addresses)
+                            (with aliases)
+                            (where :id id))
+            dto.api.IPerson))
+
+```
+
+Easy.
 
 
 ## Examples
@@ -44,8 +85,6 @@ uses m as the source of data.
 
 - Currently, the interface to implement needs to be specified with
 the full package
-- The reverse function (dto->map) doesn't work for now
-- Arrays are not supported yet
 
 
 Copyright © 2018 Pedro Abelleia Seco

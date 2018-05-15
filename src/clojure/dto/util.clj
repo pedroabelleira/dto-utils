@@ -3,7 +3,6 @@
   clojure structures"
   ;(:gen-class)
   (:require [clojure.reflect :as ref]
-            [clojure.string  :as st]
             [clojure.string  :as str]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -22,7 +21,7 @@
 (defn- getter? [method]
   (and (has-empty-parameter-list? method)
        (method? method)
-       (st/starts-with? (str (:name method)) "get")))
+       (str/starts-with? (str (:name method)) "get")))
 
 (defn- find-interface-getters
   "Returns all the getter methods (name starts by 'get', has no parameters, ...) of
@@ -62,7 +61,7 @@
 (defn- build-key
   "Builds a key in kebab case for the given name (in camel case)"
   [name]
-  (keyword (st/replace (camel->kebab name) "get-" "")))
+  (keyword (str/replace (camel->kebab name) "get-" "")))
 
 (defn- name-iface
   "Returns the name of the interface iface as a string"
@@ -108,7 +107,12 @@
 
 (declare map->dto*)
 
-(defn- create-getter-form [method obj iface-pred]
+(defn- create-getter-form
+  "Core method: it creates the getter for a given property.
+  It takes into account whether the property is an array or
+  whether it is an object which should be mapped to another
+  interface"
+  [method obj iface-pred]
   (let [rtype1 (str (:return-type method)) ; Note the conversion back and forth from type to string...
         array? (str/ends-with? rtype1 "<>")
         rtype  (symbol
