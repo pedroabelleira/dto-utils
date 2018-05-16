@@ -2,7 +2,7 @@
 
 ## Objective
 
-I want to be able to automatically transform data structures retrieved from
+The idea is to be able to automatically transform data structures retrieved from
 a DB into object implementing DTO-like interfaces. This is the quite narrow
 use case for this library.
 
@@ -17,15 +17,6 @@ package dto.api;
 public interface IAddress {
     String getStreet();
     String getNumber();
-
-    default String getFullAddress() {
-        return getStreet() + " "  + getNumber();
-    }
-}
-
-public interface IGroup { 
-    String getName();
-    IPerson[] getMembers();
 }
 
 public interface IPerson {
@@ -42,14 +33,14 @@ And let's imagine that we have a service like this:
 
 ```java
 
-public interface IUserService {
+public interface IPersonService {
     IPerson getPersonById(String id);
 }
 
 ```
 
 The objective is to be able to implement the service in clojure without having
-to implement the IPerson, IAddress or IGroup interfaces.
+to implement the IPerson or IAddress interfaces.
 
 The clojure code we look for is something like:
 

@@ -34,7 +34,7 @@
 
 (defn- kebab->camel-reductor [acc next]
   (if (= \- (last acc))
-    (str acc (clojure.string/capitalize next)) ; FIXME: A bit hackish...
+    (str acc (clojure.string/capitalize next)) ; FIXME: A bit hackish... '-'s are left
     (str acc next)))
 
 (defn kebab->camel
@@ -43,7 +43,7 @@
   [s]
   (clojure.string/replace
    (reduce kebab->camel-reductor "" s)
-   "-"
+   "-" ; FIXME: here... Since we left the dashes in the reductor, we get rid of them here
    ""))
 
 (defn- upper-case? [c] (= (str/upper-case c) (str c)))
@@ -119,9 +119,9 @@
                 (if array?
                   (str/replace rtype1 #"<>$" "")
                   rtype1))
-        dto?   (iface-pred rtype) ; Here again 
+        dto?   (iface-pred rtype)
         name   (:name method)
-        key    (keyword (build-key (str name)))
+        key    (keyword (build-key (str name))) ; Here again
         body1  `(~key ~obj)
         body   (if array?
                  (if dto?
