@@ -34,17 +34,15 @@
 
 (defn- kebab->camel-reductor [acc next]
   (if (= \- (last acc))
-    (str acc (clojure.string/capitalize next)) ; FIXME: A bit hackish... '-'s are left
+    (str (-> acc butlast str/join)
+         (clojure.string/capitalize next))
     (str acc next)))
 
 (defn kebab->camel
   "Converts a word in kebab case to the corresponding character(s)
   in camel case ('first-name' -> 'firstName')"
   [s]
-  (clojure.string/replace
-   (reduce kebab->camel-reductor "" s)
-   "-" ; FIXME: here... Since we left the dashes in the reductor, we get rid of them here
-   ""))
+  (reduce kebab->camel-reductor "" s))
 
 (defn- upper-case? [c] (= (str/upper-case c) (str c)))
 

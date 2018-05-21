@@ -51,3 +51,11 @@
        (nil?
         (first
          (data/diff orig (dto->map (map->dto orig dto.api.IPerson)))))))))
+
+(deftest kebab-camel
+  (testing "kebab->camel"
+    (is (= "full-name" (camel->kebab "fullName")))
+    (is (= "first-named-address" (camel->kebab "firstNamedAddress"))))
+  (testing "camel->kebab"
+    (is (= "fullName" (kebab->camel "full-name")))
+    (is (= "firstNamedAddress" (kebab->camel "first-named-address")))))
