@@ -69,8 +69,36 @@ Easy.
 
 
 ## Examples
+With the interfaces IPerson, IAddress defined above the macro generates the following code:
 
-...
+```clojure
+
+  (macroexpand-1 '(map->dto m dto.api.IPerson))
+
+  ;; Example code produced by the line above
+  (reify
+    dto.api.IPerson
+    (getOtherAddresses
+        [_]
+      (into-array
+       dto.api.IAddress
+       (clojure.core/map
+        (fn*
+         [p1__19790__19791__auto__]
+         (dto.util/map->dto* p1__19790__19791__auto__ dto.api.IAddress))
+        (:other-addresses m))))
+    (getAliases [_] (into-array java.lang.String (:aliases m)))
+    (getSurName [_] (:sur-name m))
+    (getAddress
+        [_]
+      (reify
+        dto.api.IAddress
+        (getNumber [_] (:number (:address m)))
+        (getFullAddress [_] (:full-address (:address m)))
+        (getStreet [_] (:street (:address m)))))
+    (getName [_] (:name m))))
+```
+
 
 ### Bugs
 

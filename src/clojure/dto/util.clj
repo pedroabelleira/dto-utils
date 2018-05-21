@@ -1,6 +1,6 @@
 (ns dto.util
-  "Macro and related utilities to implement Java interfaces from
-  clojure structures"
+  "Macro and related utilities to implement Java interfaces from clojure
+  structures"
   ;(:gen-class)
   (:require [clojure.reflect :as ref]
             [clojure.string  :as str]))
@@ -24,8 +24,8 @@
        (str/starts-with? (str (:name method)) "get")))
 
 (defn- find-interface-getters
-  "Returns all the getter methods (name starts by 'get', has no parameters, ...) of
-  the given interface iface"
+  "Returns all the getter methods (name starts by 'get', has no parameters, ...)
+  of the given interface iface"
   [iface]
   (let [info    (ref/reflect iface)
         members (:members info)
@@ -39,12 +39,12 @@
     (str acc next)))
 
 (defn kebab->camel
-  "Converts a word in kebab case to the corresponding character(s)
-  in camel case ('first-name' -> 'firstName')"
+  "Converts a word in kebab case to the corresponding character(s) in camel case
+  ('first-name' -> 'firstName')"
   [s]
   (reduce kebab->camel-reductor "" s))
 
-(defn- upper-case? [c] (= (str/upper-case c) (str c)))
+(defn- upper-case? [char] (= (str/upper-case char) (str char)))
 
 (defn- camel->kebab-reductor [acc next]
   (if (upper-case? next)
@@ -52,14 +52,14 @@
     (str acc next)))
 
 (defn camel->kebab
-  "Coverts a word in camel case to kebab case"
+  "Converts a word in camel case to kebab case"
   [s]
   (reduce camel->kebab-reductor "" s))
 
 (defn- build-key
-  "Builds a key in kebab case for the given name (in camel case)"
-  [name]
-  (keyword (str/replace (camel->kebab name) "get-" "")))
+  "Builds a key in kebab case for the given method name (in camel case)"
+  [method-name]
+  (keyword (str/replace (camel->kebab method-name) "get-" "")))
 
 (defn- name-iface
   "Returns the name of the interface iface as a string"
@@ -81,17 +81,16 @@
 ;; Functions used in macro expansion
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn- apply-transform [f form] ; Applies a transformation f to a given clojure form
-  (if (nil? f) form (f form)))
+(defn- apply-transform [f expr] ; Applies a transformation f to a given clojure form
+  (if (nil? f) expr (f expr)))
 
 (defn- create-iface-pred
-  "Creates the predicate to test whether an interface should be
-  considered as representing a DTO, from an start predicate.
-  If the predicate is nil, then the predicate will be set to
-  'is the test interface in the same package as the given interface iface?'
-  If the initial predicate is a string, the generated predicate will be
-  'is the test interface in the package of the given string, or any
-  subpackage of that one?'
+  "Creates the predicate to test whether an interface should behhll considered
+  as representing a DTO, from an start predicate. If the predicate is nil, then
+  the predicate will be set to 'is the test interface in the same package as the
+  given interface iface?'. If the initial predicate is a string, the generated
+  predicate will be 'is the test interface in the package of the given string,
+  or any subpackage of that one?'
   In any other case the predicate is returned unchanged"
   [iface & [pred]]
   (cond
@@ -104,12 +103,10 @@
     :else pred))
 
 (declare map->dto*)
-
 (defn- create-getter-form
   "Core method: it creates the getter for a given property.
-  It takes into account whether the property is an array or
-  whether it is an object which should be mapped to another
-  interface"
+  It takes into account whether the property is an array or whether it is an
+  object which should be mapped to another interface"
   [method obj iface-pred]
   (let [rtype1 (str (:return-type method)) ; Note the conversion back and forth from type to string...
         array? (str/ends-with? rtype1 "<>")
@@ -139,19 +136,18 @@
 
 (defmacro map->dto
   "Defines an object which implements the interface iface by returning to any
-   call of format getAbcXyz(void)  the value (:abc-xyz obj)
-   iface-pred represents the criteria for other interfaces found in
-   the methods of the main interface to be treated as DTOs.
-   iface-pred can be either a string or a function of one argument.
-   When iface-pred is a string, all interfaces in any package which
-   starts with string will be considered DTOs. If iface-pred is a function,
-   if must have an argument which is the interface found and return true
-   or false depending whether this interface is a DTO or not"
+   call of format getAbcXyz(void)  the value (:abc-xyz obj) iface-pred
+   represents the criteria for other interfaces found in the methods of the main
+   interface to be treated as DTOs. iface-pred can be either a string or a
+   function of one argument.
+   When iface-pred is a string, all interfaces in any package which start with
+   string will be considered DTOs. If iface-pred is a function,if must have an
+   argument which is the interface found and return true or false depending
+   whether this interface is a DTO or not"
   [obj iface & iface-pred]
   (map->dto* obj iface iface-pred))
 
 (declare read-dto-value)
-
 (defn dto->map
   "Converts an object assumed to have been created by a call to map->dto
    to a map form. Similar to 'bean' but converts properties to kebab case"
